@@ -1,0 +1,15 @@
+{
+  "name": "Campo Gara 3D - Roma/Ostia 2026",
+  "short_name": "Campo 3D",
+  "description": "Scena 3D del campo gara - 62 Campionato Italiano Traina d'Altura",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1626",
+  "theme_color": "#0d1626",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
