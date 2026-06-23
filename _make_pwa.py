@@ -49,6 +49,23 @@ def inject_body(s, frag):
     j = s.lower().rfind("</body>")
     return (s[:j] + frag + s[j:]) if j != -1 else (s + frag)
 
+# Legenda a scomparsa: toggle via CSS (display:none) -> NESSUN relayout -> la camera/zoom resta.
+# La pinch (user-scalable=no + touch-action:none sul canvas) resta sempre attiva sulla scena 3D.
+LEGEND_HEAD = (
+    '<style id="legToggle-css">'
+    '#legToggle{position:fixed;left:10px;bottom:12px;z-index:99999;background:#14533a;color:#fff;'
+    'border:none;border-radius:9px;padding:12px 16px;font:600 15px system-ui,Arial;'
+    'box-shadow:0 2px 10px rgba(0,0,0,.45);-webkit-tap-highlight-color:transparent;}'
+    'body.legHidden g.legend,body.legHidden .legend,body.legHidden g.colorbar,body.legHidden .colorbar{display:none !important;}'
+    '.plotly-graph-div canvas{touch-action:none !important;}'
+    '</style>')
+LEGEND_BODY = (
+    '<button id="legToggle" type="button">Nascondi legenda</button>'
+    '<script>(function(){var b=document.getElementById("legToggle");if(!b)return;'
+    'b.addEventListener("click",function(ev){ev.preventDefault();'
+    'var h=document.body.classList.toggle("legHidden");'
+    'b.textContent=h?"Mostra legenda":"Nascondi legenda";});})();</script>')
+
 orig = html
 if "manifest.json" not in html:
     html = inject_body(inject_head(html, HEAD_TAGS), SW_REG)
@@ -60,6 +77,11 @@ if 'id="mobileFix"' not in html:
     print("Mobile: viewport + modebar grande + resize iniettati")
 else:
     print("Mobile: gia' presente")
+if 'id="legToggle"' not in html:
+    html = inject_body(inject_head(html, LEGEND_HEAD), LEGEND_BODY)
+    print("Legenda: toggle a scomparsa + touch-action canvas iniettati")
+else:
+    print("Legenda: gia' presente")
 if html != orig:
     open(HTML, "w", encoding="utf-8").write(html)
     print("OK index.html aggiornato")
@@ -88,7 +110,7 @@ print("OK manifest.json")
 
 # --- 3) service worker (cache-first, offline dopo la prima apertura) ---
 sw = '''// PWA Campo Gara 3D - cache-first per uso offline a bordo
-const CACHE = 'campo3d-v2';
+const CACHE = 'campo3d-v3';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
