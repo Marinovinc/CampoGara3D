@@ -21,26 +21,50 @@ SW_REG = ('<script>if("serviceWorker" in navigator){'
           'navigator.serviceWorker.register("sw.js").catch(function(e){console.log("SW",e);});});}'
           '</script>')
 
+# Mobile fix: viewport (pinch -> scena 3D, non la pagina), modebar grande, plot full-screen + resize
+MOBILE_HEAD = (
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">'
+    '<style id="mobileFix">'
+    'html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0d1626;}'
+    '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+    '.js-plotly-plot .plotly .modebar{opacity:1 !important;}'
+    '.modebar{transform:scale(1.9);transform-origin:top right;}'
+    '@media (pointer:coarse){.modebar{transform:scale(2.3);}}'
+    '</style>')
+MOBILE_JS = (
+    '<script>(function(){function rs(){var d=document.querySelector(".plotly-graph-div");'
+    'if(d&&window.Plotly&&Plotly.Plots){try{Plotly.Plots.resize(d);}catch(e){}}}'
+    'window.addEventListener("load",function(){setTimeout(rs,300);setTimeout(rs,1200);});'
+    'window.addEventListener("resize",rs);'
+    'window.addEventListener("orientationchange",function(){setTimeout(rs,400);});})();</script>')
+
+def inject_head(s, frag):
+    i = s.lower().find("</head>")
+    if i != -1: return s[:i] + frag + s[i:]
+    h = s.lower().find("<head>")
+    if h != -1: ins = h + len("<head>"); return s[:ins] + frag + s[ins:]
+    return frag + s
+
+def inject_body(s, frag):
+    j = s.lower().rfind("</body>")
+    return (s[:j] + frag + s[j:]) if j != -1 else (s + frag)
+
+orig = html
 if "manifest.json" not in html:
-    i = html.lower().find("</head>")
-    if i == -1:   # Plotly minimale: inserisci un head dopo <html>
-        h = html.lower().find("<head>")
-        if h != -1:
-            ins = h + len("<head>")
-            html = html[:ins] + HEAD_TAGS + html[ins:]
-        else:
-            html = HEAD_TAGS + html
-    else:
-        html = html[:i] + HEAD_TAGS + html[i:]
-    j = html.lower().rfind("</body>")
-    if j == -1:
-        html = html + SW_REG
-    else:
-        html = html[:j] + SW_REG + html[j:]
-    open(HTML, "w", encoding="utf-8").write(html)
-    print("OK index.html: iniettati manifest + registrazione SW")
+    html = inject_body(inject_head(html, HEAD_TAGS), SW_REG)
+    print("PWA: iniettati manifest + registrazione SW")
 else:
-    print("index.html gia' PWA: nessuna modifica")
+    print("PWA: gia' presente")
+if 'id="mobileFix"' not in html:
+    html = inject_body(inject_head(html, MOBILE_HEAD), MOBILE_JS)
+    print("Mobile: viewport + modebar grande + resize iniettati")
+else:
+    print("Mobile: gia' presente")
+if html != orig:
+    open(HTML, "w", encoding="utf-8").write(html)
+    print("OK index.html aggiornato")
+else:
+    print("index.html: nessuna modifica")
 
 # --- 2) manifest.json ---
 manifest = '''{
@@ -64,7 +88,7 @@ print("OK manifest.json")
 
 # --- 3) service worker (cache-first, offline dopo la prima apertura) ---
 sw = '''// PWA Campo Gara 3D - cache-first per uso offline a bordo
-const CACHE = 'campo3d-v1';
+const CACHE = 'campo3d-v2';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
