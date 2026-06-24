@@ -153,7 +153,7 @@ layout["title"] = dict(text="Rotta A — traina in 3D", x=0.5, xanchor="center",
                        font=dict(size=15), automargin=True)
 layout["margin"] = dict(l=0, r=0, t=46, b=0)
 layout["paper_bgcolor"] = "#0d1626"; layout["font"] = dict(color="#e8eef6")
-layout["legend"] = dict(x=0.01, y=0.99, bgcolor="rgba(13,22,38,0.6)", font=dict(size=10))
+layout["legend"] = dict(x=0.01, y=0.90, bgcolor="rgba(13,22,38,0.85)", bordercolor="#2c416c", borderwidth=1, font=dict(size=10))
 layout["updatemenus"] = [dict(type="buttons", showactive=False, x=0.02, y=0.06, xanchor="left", buttons=[
     dict(label="▶ Play", method="animate", args=[None, dict(frame=dict(duration=300, redraw=True), fromcurrent=True, transition=dict(duration=0))]),
     dict(label="⏸ Pausa", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")]),
@@ -181,5 +181,56 @@ head_inject = (
 )
 html = open("ROTTA_A_3D.html", "r", encoding="utf-8").read()
 html = html.replace("<head>", "<head>\n" + head_inject, 1)
+
+# --- UI a scomparsa: legenda + scala colore + guida (default nascoste su mobile/iPad) ---
+body_inject = r"""
+<style>
+#uiToggles{position:fixed;top:8px;left:8px;z-index:1000;display:flex;gap:6px;flex-direction:column}
+#uiToggles button{font:600 12px system-ui,-apple-system,sans-serif;background:rgba(19,33,58,.92);
+  color:#cfe0f2;border:1px solid #2c416c;border-radius:8px;padding:7px 11px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+#uiToggles button.active{background:#1e3a63;color:#fff;border-color:#16e0ff}
+#guideBox{position:fixed;top:8px;left:108px;z-index:1001;max-width:250px;background:rgba(13,22,38,.96);
+  border:1px solid #2c416c;border-radius:10px;padding:10px 13px;color:#dfeaf5;
+  font:13px system-ui,-apple-system,sans-serif;display:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+#guideBox h4{margin:0 0 6px;color:#16e0ff;font-size:13px}
+#guideBox ul{margin:0;padding-left:16px}#guideBox li{margin:3px 0}
+@media(min-width:1025px){#uiToggles{top:10px;left:10px}}
+</style>
+<div id="uiToggles">
+  <button id="btnLeg" title="Mostra/nascondi legenda e scala">Legenda</button>
+  <button id="btnGuide" title="Come si usa">Guida</button>
+</div>
+<div id="guideBox">
+  <h4>Come usare la scena 3D</h4>
+  <ul>
+    <li><b>Un dito</b>: ruota la scena</li>
+    <li><b>Due dita</b>: zoom (pinch)</li>
+    <li><b>Play</b> / slider: la barca percorre la rotta</li>
+    <li><b>Beam cyan</b> = ecoscandaglio (barca&rarr;fondo)</li>
+    <li><b>Linea arancione</b> = rotta sul fondale (cresce avanzando)</li>
+  </ul>
+</div>
+<script>
+(function(){
+  function gd(){return document.querySelector('.plotly-graph-div');}
+  function ready(cb){var g=gd();(g&&g._fullLayout&&window.Plotly)?cb(g):setTimeout(function(){ready(cb);},150);}
+  var small=Math.min(window.innerWidth,window.innerHeight)<=1024;   // mobile + iPad
+  var legOn=!small;                                                  // di default nascosta su mobile/iPad
+  function applyLeg(g){Plotly.relayout(g,{showlegend:legOn});Plotly.restyle(g,{showscale:legOn},[0]);
+    document.getElementById('btnLeg').classList.toggle('active',legOn);}
+  ready(function(g){
+    applyLeg(g);
+    document.getElementById('btnLeg').addEventListener('click',function(){legOn=!legOn;applyLeg(gd());});
+  });
+  var gOpen=false;
+  document.getElementById('btnGuide').addEventListener('click',function(){
+    gOpen=!gOpen;document.getElementById('guideBox').style.display=gOpen?'block':'none';
+    this.classList.toggle('active',gOpen);
+  });
+})();
+</script>
+"""
+html = html.replace("</body>", body_inject + "\n</body>", 1)
 open("ROTTA_A_3D.html", "w", encoding="utf-8").write(html)
 print("SAVED ROTTA_A_3D.html | punti fondale:", len(SB), "| frames:", len(frames), "| iOS meta: ok")
