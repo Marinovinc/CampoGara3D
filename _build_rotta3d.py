@@ -326,3 +326,56 @@ body_inject = r"""
 html = html.replace("</body>", data_js + body_inject + "\n</body>", 1)
 open("ROTTA_A_3D.html", "w", encoding="utf-8").write(html)
 print("SAVED ROTTA_A_3D.html | punti fondale:", len(SB), "| frames:", len(frames), "| iOS meta: ok")
+
+# ===== versione OFFLINE (PWA con service worker, pre-cache) in ./offline/ =====
+import os, shutil
+os.makedirs("offline", exist_ok=True)
+pwa_head = ('<link rel="manifest" href="manifest.webmanifest">\n'
+            '<link rel="apple-touch-icon" href="icon-192.png">\n')
+sw_reg = ('<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){'
+          'navigator.serviceWorker.register("sw.js").catch(function(e){console.warn("SW",e);});});}</script>')
+off_html = html.replace("<head>", "<head>\n" + pwa_head, 1).replace("</body>", sw_reg + "\n</body>", 1)
+open("offline/index.html", "w", encoding="utf-8").write(off_html)
+
+open("offline/manifest.webmanifest", "w", encoding="utf-8").write('''{
+  "name": "Rotta A 3D - Ostia 2026 (offline)",
+  "short_name": "Rotta A 3D",
+  "description": "Percorso di traina 3D con posizione GPS - uso offline a bordo",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1626",
+  "theme_color": "#0d1626",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}''')
+
+open("offline/sw.js", "w", encoding="utf-8").write('''// PWA Rotta A 3D - cache-first, pre-scarica tutto per uso offline a bordo
+const CACHE = 'rotta3d-v1';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    caches.match(e.request, {ignoreSearch: true}).then(r =>
+      r || fetch(e.request).then(resp => {
+        try { const cp = resp.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); } catch (_) {}
+        return resp;
+      }).catch(() => caches.match('./index.html'))
+    )
+  );
+});''')
+
+for _ic in ("icon-192.png", "icon-512.png"):
+    if os.path.exists(_ic):
+        shutil.copy(_ic, os.path.join("offline", _ic))
+print("OFFLINE pronto: offline/index.html + sw.js + manifest.webmanifest + icone")
