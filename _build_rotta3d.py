@@ -196,10 +196,12 @@ body_inject = r"""
 #guideBox h4{margin:0 0 6px;color:#16e0ff;font-size:13px}
 #guideBox ul{margin:0;padding-left:16px}#guideBox li{margin:3px 0}
 @media(min-width:1025px){#uiToggles{top:10px;left:10px}}
+@media(pointer:coarse){.modebar,.modebar-container{display:none!important}}
 </style>
 <div id="uiToggles">
   <button id="btnLeg" title="Mostra/nascondi legenda e scala">Legenda</button>
   <button id="btnGuide" title="Come si usa">Guida</button>
+  <button id="btnReset" title="Ripristina la vista">&#8635; Vista</button>
 </div>
 <div id="guideBox">
   <h4>Come usare la scena 3D</h4>
@@ -215,7 +217,7 @@ body_inject = r"""
 (function(){
   function gd(){return document.querySelector('.plotly-graph-div');}
   function ready(cb){var g=gd();(g&&g._fullLayout&&window.Plotly)?cb(g):setTimeout(function(){ready(cb);},150);}
-  var small=Math.min(window.innerWidth,window.innerHeight)<=1024;   // mobile + iPad
+  var small=window.matchMedia('(pointer: coarse)').matches||window.matchMedia('(max-width:820px)').matches;   // mobile + iPad (touch)
   var legOn=!small;                                                  // di default nascosta su mobile/iPad
   function applyLeg(g){Plotly.relayout(g,{showlegend:legOn});Plotly.restyle(g,{showscale:legOn},[0]);
     document.getElementById('btnLeg').classList.toggle('active',legOn);}
@@ -227,6 +229,10 @@ body_inject = r"""
   document.getElementById('btnGuide').addEventListener('click',function(){
     gOpen=!gOpen;document.getElementById('guideBox').style.display=gOpen?'block':'none';
     this.classList.toggle('active',gOpen);
+  });
+  var CAM={eye:{x:1.5,y:-1.7,z:1.05},center:{x:0,y:0,z:-0.18}};
+  document.getElementById('btnReset').addEventListener('click',function(){
+    if(window.Plotly&&gd())Plotly.relayout(gd(),{'scene.camera':CAM});
   });
 })();
 </script>
