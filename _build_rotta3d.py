@@ -149,7 +149,8 @@ for t in steps:
 
 # --- layout ---
 layout["scene"]["camera"] = dict(eye=dict(x=1.5, y=-1.7, z=1.05), center=dict(x=0, y=0, z=-0.18))
-layout["title"] = dict(text="Rotta A — traina 3D: la rotta si traccia sul fondale mentre la barca avanza", x=0.5, font=dict(size=16))
+layout["title"] = dict(text="Rotta A — traina in 3D", x=0.5, xanchor="center", y=0.985,
+                       font=dict(size=15), automargin=True)
 layout["margin"] = dict(l=0, r=0, t=46, b=0)
 layout["paper_bgcolor"] = "#0d1626"; layout["font"] = dict(color="#e8eef6")
 layout["legend"] = dict(x=0.01, y=0.99, bgcolor="rgba(13,22,38,0.6)", font=dict(size=10))
