@@ -231,6 +231,11 @@ body_inject = r"""
     <li><b>Linea arancione</b> = rotta sul fondale (cresce avanzando)</li>
     <li><b>GPS</b>: mostra la tua barca reale (verde); toccala per le correzioni</li>
   </ul>
+  <div style="margin-top:7px;border-top:1px solid #2c416c;padding-top:6px;font-size:12px">
+    <a href="https://marinovinc.github.io/GaraOstia2026/ROTTA_A_LA_MIGLIORE.html" target="_blank" rel="noopener" style="color:#16e0ff;display:block;margin:2px 0">Dossier Rotta A &#8599;</a>
+    <a href="https://github.com/Marinovinc/GaraOstia2026/blob/main/HANDOVER_SESSIONE_rotta_a_dossier_3d_20260624.md" target="_blank" rel="noopener" style="color:#16e0ff;display:block;margin:2px 0">Handover sessione &#8599;</a>
+    <a href="https://github.com/Marinovinc/GaraOstia2026/blob/main/DOCUMENTAZIONE_TECNICA_rotta_a_dossier_3d_20260624.md" target="_blank" rel="noopener" style="color:#16e0ff;display:block;margin:2px 0">Documentazione tecnica &#8599;</a>
+  </div>
 </div>
 <div id="corrPanel">
   <div class="hd"><b>Correzioni rotta</b><button id="corrToggle" title="Comprimi">&#9662;</button></div>
