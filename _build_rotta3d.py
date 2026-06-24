@@ -182,7 +182,14 @@ head_inject = (
 html = open("ROTTA_A_3D.html", "r", encoding="utf-8").read()
 html = html.replace("<head>", "<head>\n" + head_inject, 1)
 
-# --- UI a scomparsa: legenda + scala colore + guida (default nascoste su mobile/iPad) ---
+# --- dati per il modulo "posizione reale GPS" (rotta, spot, conversione lat/lon->km) ---
+SPOTS_NAMED = [(41.675, 11.990, "bordo NE"), (41.55417, 11.86146, "banco 717 m"), (41.53021, 11.87292, "drop-off 924 m")]
+route_js = json.dumps([{"x": round(rx[i], 4), "y": round(ry[i], 4), "lat": WP[i][1], "lon": WP[i][2], "m": WP[i][0]} for i in range(len(WP))])
+spots_js = json.dumps([{"x": round(to_xy(s[0], s[1])[0], 4), "y": round(to_xy(s[0], s[1])[1], 4), "name": s[2]} for s in SPOTS_NAMED])
+data_js = ('<script>window.__ROUTE__=%s;window.__SPOTS__=%s;window.__GEO__={LAT0:%r,LON0:%r,KX:%r,KY:%r,ZS:%r};</script>'
+           % (route_js, spots_js, LAT0, LON0, KX, KY, ZS))
+
+# --- UI a scomparsa: legenda/scala/guida + posizione reale GPS + correzioni + zoom ---
 body_inject = r"""
 <style>
 #uiToggles{position:fixed;top:8px;left:8px;z-index:1000;display:flex;gap:6px;flex-direction:column}
@@ -197,11 +204,22 @@ body_inject = r"""
 #guideBox ul{margin:0;padding-left:16px}#guideBox li{margin:3px 0}
 @media(min-width:1025px){#uiToggles{top:10px;left:10px}}
 @media(pointer:coarse){.modebar,.modebar-container{display:none!important}}
+.zoomRow{display:flex;gap:6px}.zoomRow button{flex:1;font-size:17px!important;padding:3px 0!important;font-weight:700}
+#corrPanel{position:fixed;top:8px;right:8px;z-index:1001;width:min(76vw,300px);
+  background:rgba(13,22,38,.95);border:1px solid #2c416c;border-radius:10px;padding:8px 11px;
+  color:#dfeaf5;font:13px system-ui,-apple-system,sans-serif;display:none;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+#corrPanel .hd{display:flex;justify-content:space-between;align-items:center;gap:6px}
+#corrPanel .hd b{color:#16e0ff;font-size:12px}
+#corrToggle{background:none;border:none;color:#cfe0f2;font-size:15px;cursor:pointer;padding:0 2px}
+#corrBody{margin-top:5px;line-height:1.45}
+#tolRow{font-size:11px;color:#9fb0c8;margin-top:7px}#tolRow input{vertical-align:middle;width:100%}
 </style>
 <div id="uiToggles">
   <button id="btnLeg" title="Mostra/nascondi legenda e scala">Legenda</button>
   <button id="btnGuide" title="Come si usa">Guida</button>
   <button id="btnReset" title="Ripristina la vista">&#8635; Vista</button>
+  <button id="btnGps" title="Mostra la tua posizione GPS reale">GPS</button>
+  <div class="zoomRow"><button id="btnZoomOut" title="Zoom indietro">&minus;</button><button id="btnZoomIn" title="Zoom avanti">+</button></div>
 </div>
 <div id="guideBox">
   <h4>Come usare la scena 3D</h4>
@@ -211,7 +229,13 @@ body_inject = r"""
     <li><b>Play</b> / slider: la barca percorre la rotta</li>
     <li><b>Beam cyan</b> = ecoscandaglio (barca&rarr;fondo)</li>
     <li><b>Linea arancione</b> = rotta sul fondale (cresce avanzando)</li>
+    <li><b>GPS</b>: mostra la tua barca reale (verde); toccala per le correzioni</li>
   </ul>
+</div>
+<div id="corrPanel">
+  <div class="hd"><b>Correzioni rotta</b><button id="corrToggle" title="Comprimi">&#9662;</button></div>
+  <div id="corrBody">Attendo posizione GPS&hellip;</div>
+  <div id="tolRow">Tolleranza: <span id="tolVal">50 m</span><input id="tolSlider" type="range" min="10" max="300" step="10" value="50"></div>
 </div>
 <script>
 (function(){
@@ -236,7 +260,69 @@ body_inject = r"""
   });
 })();
 </script>
+<script>
+(function(){
+  var R=window.__ROUTE__||[], SP=window.__SPOTS__||[], G=window.__GEO__||{};
+  function gd(){return document.querySelector('.plotly-graph-div');}
+  function ready(cb){var g=gd();(g&&g._fullLayout&&window.Plotly)?cb(g):setTimeout(function(){ready(cb);},150);}
+  function toXY(lat,lon){return {x:(lon-G.LON0)*G.KX, y:(lat-G.LAT0)*G.KY};}
+  function dkm(ax,ay,bx,by){var dx=ax-bx,dy=ay-by;return Math.sqrt(dx*dx+dy*dy);}
+  function brgTrue(dx,dy){var b=Math.atan2(dx,dy)*180/Math.PI;return (b+360)%360;}
+  function nearest(px,py){var best={d:1e9,segi:0};
+    for(var i=0;i<R.length-1;i++){var ax=R[i].x,ay=R[i].y,bx=R[i+1].x,by=R[i+1].y;
+      var vx=bx-ax,vy=by-ay,L2=vx*vx+vy*vy; var t=L2>0?((px-ax)*vx+(py-ay)*vy)/L2:0; t=Math.max(0,Math.min(1,t));
+      var cx=ax+vx*t,cy=ay+vy*t,dd=dkm(px,py,cx,cy); if(dd<best.d){best={d:dd,segi:i};}}
+    return best;}
+  var watchId=null,realIdx=null,gpsOn=false,lastFix=null,TOL=50;
+  function setReal(x,y){var g=gd();
+    if(realIdx===null){Plotly.addTraces(g,{type:'scatter3d',x:[x],y:[y],z:[G.ZS],mode:'markers+text',
+      marker:{size:11,color:'#39ff7a',symbol:'diamond',line:{color:'#06351c',width:2}},
+      text:['TU'],textposition:'top center',textfont:{color:'#39ff7a',size:12},
+      name:'posizione reale',hoverinfo:'text',hovertext:['la tua barca (GPS) - tocca per le correzioni']});
+      realIdx=g.data.length-1;}
+    else{Plotly.restyle(g,{x:[[x]],y:[[y]],z:[[G.ZS]]},[realIdx]);}}
+  function update(pos){lastFix=pos;
+    var lat=pos.coords.latitude,lon=pos.coords.longitude,hd=pos.coords.heading;
+    var p=toXY(lat,lon); setReal(p.x,p.y);
+    var n=nearest(p.x,p.y), xtm=n.d*1000;
+    var nx=R[Math.min(n.segi+1,R.length-1)];
+    var dx=nx.x-p.x,dy=nx.y-p.y, brg=brgTrue(dx,dy), distWp=Math.sqrt(dx*dx+dy*dy)*1000;
+    var bs=null; for(var i=0;i<SP.length;i++){var dd=dkm(p.x,p.y,SP[i].x,SP[i].y); if(!bs||dd<bs.d)bs={d:dd,name:SP[i].name};}
+    var vira='prua non disponibile (sei fermo)';
+    if(hd!=null&&!isNaN(hd)){var df=((brg-hd+540)%360)-180;
+      vira=Math.abs(df)<5?'dritto sulla prua':('vira a '+(df>0?'dritta':'sinistra')+' di '+Math.round(Math.abs(df))+'°');}
+    var wpn=Math.min(n.segi+2,R.length), h;
+    if(xtm<=TOL){h='<b style="color:#39ff7a">IN ROTTA</b> &middot; '+Math.round(xtm)+' m dal tracciato (tol '+TOL+' m)<br>'+
+      'Prossimo wp '+wpn+': '+Math.round(distWp)+' m a <b>'+Math.round(brg)+'°</b>';}
+    else{h='<b style="color:#ffd54a">FUORI ROTTA '+Math.round(xtm)+' m</b><br>'+
+      'Tieni <b>'+Math.round(brg)+'°</b> verso wp '+wpn+' ('+Math.round(distWp)+' m)<br>'+
+      vira+'<br>Spot vicino: '+bs.name+' ('+Math.round(bs.d*1000)+' m)';}
+    document.getElementById('corrBody').innerHTML=h;}
+  function gerr(e){document.getElementById('corrBody').innerHTML='<b style="color:#ff6b6b">GPS non disponibile</b><br>'+((e&&e.message)||'permesso negato');}
+  function start(){if(!navigator.geolocation){gerr({message:'Geolocalizzazione non supportata'});return;}
+    watchId=navigator.geolocation.watchPosition(update,gerr,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});gpsOn=true;}
+  function stop(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;}gpsOn=false;
+    if(realIdx!=null){Plotly.deleteTraces(gd(),[realIdx]);realIdx=null;}}
+  document.getElementById('btnGps').addEventListener('click',function(){var pn=document.getElementById('corrPanel');
+    if(!gpsOn){start();pn.style.display='block';this.classList.add('active');}
+    else{stop();pn.style.display='none';this.classList.remove('active');}});
+  document.getElementById('corrToggle').addEventListener('click',function(){var b=document.getElementById('corrBody'),tr=document.getElementById('tolRow');
+    var v=(b.style.display==='none'); b.style.display=v?'block':'none'; tr.style.display=v?'block':'none'; this.innerHTML=v?'▾':'▸';});
+  document.getElementById('tolSlider').addEventListener('input',function(){TOL=+this.value;
+    document.getElementById('tolVal').textContent=TOL+' m'; if(lastFix)update(lastFix);});
+  function zoom(f){var g=gd();if(!g||!g._fullLayout)return;var c=g._fullLayout.scene.camera.center,e=g._fullLayout.scene.camera.eye;
+    Plotly.relayout(g,{'scene.camera.eye':{x:c.x+(e.x-c.x)*f,y:c.y+(e.y-c.y)*f,z:c.z+(e.z-c.z)*f}});}
+  document.getElementById('btnZoomIn').addEventListener('click',function(){zoom(0.8);});
+  document.getElementById('btnZoomOut').addEventListener('click',function(){zoom(1.25);});
+  ready(function(g){g.on('plotly_click',function(ev){
+    if(ev&&ev.points&&ev.points[0]&&realIdx!=null&&ev.points[0].curveNumber===realIdx){
+      document.getElementById('corrPanel').style.display='block';
+      document.getElementById('corrBody').style.display='block';
+      document.getElementById('tolRow').style.display='block';
+      document.getElementById('corrToggle').innerHTML='▾';}});});
+})();
+</script>
 """
-html = html.replace("</body>", body_inject + "\n</body>", 1)
+html = html.replace("</body>", data_js + body_inject + "\n</body>", 1)
 open("ROTTA_A_3D.html", "w", encoding="utf-8").write(html)
 print("SAVED ROTTA_A_3D.html | punti fondale:", len(SB), "| frames:", len(frames), "| iOS meta: ok")
